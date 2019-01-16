@@ -5,50 +5,32 @@ import (
 	"time"
 )
 
+type doneSignal struct{}
+
 func main() {
 	rand := newRand()
-	for {
+	for i := 0; true; i++ {
 		log.Printf("Starting twin goroutines")
+		done := make(chan doneSignal)
+		go reader(done, rand)
+		go writer(done, rand)
 
-		// start twin reader and writer goroutines
-		readerDone := make(chan bool)
-		go reader(readerDone, rand)
-		writerDone := make(chan bool)
-		go writer(writerDone, rand)
-
-		// block until one of reader or writer signals done
+		// block until we're done
 		select {
-		case <-readerDone:
-			log.Printf("Reader signalled done, closing writer")
-			writerDone <- true
-		case <-writerDone:
-			log.Printf("Writer signalled done, closing writer")
-			readerDone <- true
+		case <-done:
+			log.Printf("Someone signalled done, closing channel")
+			close(done)
 		}
-
-		// close both channels
-		// BUG: it's entirely possible that the reader or writer is still going
-		// 2019/01/16 22:29:17 Reader signalled done, closing writer
-		// 2019/01/16 22:29:17 Reader doing work
-		// 2019/01/16 22:29:17 Reader doing work
-		// 2019/01/16 22:29:17 Reader doing work
-		// 2019/01/16 22:29:17 Reader doing work
-		// 2019/01/16 22:29:17 Reader doing work
-		// 2019/01/16 22:29:17 Snake eyes! Signalling reader done.
-		// 2019/01/16 22:29:17 Writer doing work
-		// panic: send on closed channel
-		close(readerDone)
-		close(writerDone)
 
 		time.Sleep(10 * time.Second)
 	}
 }
 
-func reader(readerDone chan bool, rand *randWrapper) {
+func reader(done chan doneSignal, rand *randWrapper) {
 READ_LOOP:
 	for {
 		select {
-		case <-readerDone:
+		case <-done:
 			break READ_LOOP
 		default:
 			log.Println("Reader doing work")
@@ -56,7 +38,7 @@ READ_LOOP:
 			snakeEyes := rand.snakeEyes()
 			if snakeEyes {
 				log.Printf("Snake eyes! Signalling reader done.")
-				readerDone <- true
+				done <- doneSignal{}
 			}
 
 			sleepTime := rand.sleepTime()
@@ -66,11 +48,11 @@ READ_LOOP:
 	}
 }
 
-func writer(writerDone chan bool, rand *randWrapper) {
+func writer(done chan doneSignal, rand *randWrapper) {
 WRITE_LOOP:
 	for {
 		select {
-		case <-writerDone:
+		case <-done:
 			break WRITE_LOOP
 		default:
 			log.Println("Writer doing work")
@@ -78,7 +60,7 @@ WRITE_LOOP:
 			snakeEyes := rand.snakeEyes()
 			if snakeEyes {
 				log.Printf("Snake eyes! Signalling writer done.")
-				writerDone <- true
+				done <- doneSignal{}
 			}
 
 			sleepTime := rand.sleepTime()
