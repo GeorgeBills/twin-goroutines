@@ -1,17 +1,19 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"time"
 )
 
 func main() {
 	for {
+		rand := newRand()
+
 		// start twin reader and writer goroutines
 		readerDone := make(chan bool)
-		go reader(readerDone)
+		go reader(readerDone, rand)
 		writerDone := make(chan bool)
-		go writer(writerDone)
+		go writer(writerDone, rand)
 
 		// block until one of reader or writer signals done
 		select {
@@ -29,28 +31,32 @@ func main() {
 	}
 }
 
-func reader(readerDone chan bool) {
+func reader(readerDone chan bool, rand *randWrapper) {
 READ_LOOP:
 	for {
 		select {
 		case <-readerDone:
 			break READ_LOOP
 		default:
-			fmt.Println("Reader doing work")
-			time.Sleep(1 * time.Second)
+			log.Println("Reader doing work")
+			sleepTime := rand.sleepTime()
+			log.Printf("Reader sleeping for %d seconds", sleepTime/time.Second)
+			time.Sleep(sleepTime)
 		}
 	}
 }
 
-func writer(writerDone chan bool) {
+func writer(writerDone chan bool, rand *randWrapper) {
 WRITE_LOOP:
 	for {
 		select {
 		case <-writerDone:
 			break WRITE_LOOP
 		default:
-			fmt.Println("Writer doing work")
-			time.Sleep(3 * time.Second)
+			log.Println("Writer doing work")
+			sleepTime := rand.sleepTime()
+			log.Printf("Writer sleeping for %d seconds", sleepTime/time.Second)
+			time.Sleep(sleepTime)
 		}
 	}
 }
