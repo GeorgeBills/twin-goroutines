@@ -30,3 +30,12 @@ func (rw *randWrapper) sleepTime() time.Duration {
 	defer rw.mux.Unlock()
 	return time.Duration(rw.rand.Intn(maxSleepTime)) * time.Second
 }
+
+func (rw *randWrapper) snakeEyes() bool {
+	rw.mux.Lock()
+	defer rw.mux.Unlock()
+	dice1 := rw.rand.Intn(6)
+	dice2 := rw.rand.Intn(6)
+	// 1 in 36 would be quicker, but this is more fun
+	return dice1 == 1 && dice2 == 1
+}
