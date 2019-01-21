@@ -2,70 +2,72 @@ package main
 
 import (
 	"log"
+	"sync"
 	"time"
 )
-
-type doneSignal struct{}
 
 func main() {
 	rand := newRand()
 	for i := 0; true; i++ {
 		log.Printf("Starting twin goroutines")
-		done := make(chan doneSignal)
-		go reader(done, rand)
-		go writer(done, rand)
+		done := newDone()
+
+		go workLoop(read, done, rand)
+		go workLoop(write, done, rand)
 
 		// block until we're done
 		select {
-		case <-done:
-			log.Printf("Someone signalled done, closing channel")
-			close(done)
+		case <-done.done:
+			log.Printf("Someone signalled done")
 		}
 
 		time.Sleep(10 * time.Second)
 	}
 }
 
-func reader(done chan doneSignal, rand *randWrapper) {
-READ_LOOP:
+func read() {
+	log.Println("Reader doing work")
+}
+
+func write() {
+	log.Println("Writer doing work")
+}
+
+func workLoop(doWork func(), done *done, rand *randWrapper) {
+WORK_LOOP:
 	for {
 		select {
-		case <-done:
-			break READ_LOOP
+		case <-done.done:
+			break WORK_LOOP
 		default:
-			log.Println("Reader doing work")
+			doWork()
 
 			snakeEyes := rand.snakeEyes()
 			if snakeEyes {
-				log.Printf("Snake eyes! Signalling reader done.")
-				done <- doneSignal{}
+				log.Printf("Snake eyes! Signalling done.")
+				done.signalDone()
 			}
 
 			sleepTime := rand.sleepTime()
-			log.Printf("Reader sleeping for %d seconds", sleepTime/time.Second)
+			log.Printf("Sleeping for %d seconds", sleepTime/time.Second)
 			time.Sleep(sleepTime)
 		}
 	}
 }
 
-func writer(done chan doneSignal, rand *randWrapper) {
-WRITE_LOOP:
-	for {
-		select {
-		case <-done:
-			break WRITE_LOOP
-		default:
-			log.Println("Writer doing work")
+type done struct {
+	done chan struct{}
+	once sync.Once
+}
 
-			snakeEyes := rand.snakeEyes()
-			if snakeEyes {
-				log.Printf("Snake eyes! Signalling writer done.")
-				done <- doneSignal{}
-			}
+func newDone() *done {
+	ch := make(chan struct{})
+	return &done{done: ch}
+}
 
-			sleepTime := rand.sleepTime()
-			log.Printf("Writer sleeping for %d seconds", sleepTime/time.Second)
-			time.Sleep(sleepTime)
-		}
-	}
+func (d *done) signalDone() {
+	// you can only close a channel once or Go panics
+	d.once.Do(func() {
+		close(d.done)
+	})
 }
